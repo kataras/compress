@@ -40,7 +40,7 @@ import "encoding/json"
 
 buf := new(bytes.Buffer)
 
-w, err := compress.NewWriter(buf, encoding, -1)
+w, err := compress.NewWriter(buf, compress.GZIP, -1)
 if err != nil {
     panic(err)
 }
@@ -54,7 +54,7 @@ Wrap any `io.Reader` for reading compressed data with `NewReader`:
 
 ```go
 // Where resp.Body is an io.Reader.
-r, err := compress.NewReader(resp.Body, encoding)
+r, err := compress.NewReader(resp.Body, compress.GZIP)
 if err != nil {
     panic(err)
 }
