@@ -133,6 +133,23 @@ func NewReader(src io.Reader, encoding string) (*Reader, error) {
 	return v, nil
 }
 
+// TryReader calls the `NewReader` function
+// and if non nil error returned then
+// it just returns the original "src".
+func TryReader(src io.Reader, encoding string) io.ReadCloser {
+	cr, err := NewReader(src, encoding)
+	if err != nil {
+		srcReadCloser, ok := src.(io.ReadCloser)
+		if !ok {
+			srcReadCloser = &noOpReadCloser{src}
+		}
+
+		return srcReadCloser
+	}
+
+	return cr
+}
+
 // Header keys.
 const (
 	AcceptEncodingHeaderKey  = "Accept-Encoding"
@@ -198,6 +215,18 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 	}
 
 	return v, nil
+}
+
+// TryResponseWriter calls the `NewResponseWriter` function
+// and if non nil error returned then
+// it just returns the original "w" http.ResponseWriter.
+func TryResponseWriter(w http.ResponseWriter, r *http.Request, level int) http.ResponseWriter {
+	rw, err := NewResponseWriter(w, r, level)
+	if err != nil {
+		return w
+	}
+
+	return rw
 }
 
 func (w *ResponseWriter) Write(p []byte) (int, error) {
