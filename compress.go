@@ -44,7 +44,7 @@ var (
 // Writer is an interface which all compress writers should implement.
 type Writer interface {
 	io.WriteCloser
-	// All known implementations contain `Flush` and `Reset` methods,
+	// All known implementations contain `Flush`, `Reset` (and `Close`) methods,
 	// so we wanna declare them upfront.
 	Flush() error
 	Reset(io.Writer)
@@ -104,7 +104,7 @@ func NewReader(src io.Reader, encoding string) (*Reader, error) {
 	case GZIP:
 		rc, err = gzip.NewReader(src)
 	case DEFLATE:
-		rc = &noOpReadCloser{flate.NewReader(src)}
+		rc = flate.NewReader(src)
 	case BROTLI:
 		rc = &noOpReadCloser{brotli.NewReader(src)}
 	case SNAPPY:
@@ -136,6 +136,9 @@ func NewReader(src io.Reader, encoding string) (*Reader, error) {
 // TryReader calls the `NewReader` function
 // and if non nil error returned then
 // it just returns the original "src".
+//
+// This is just a helper for inline reader.
+// Use `Handler` or `ReadHandler` instead.
 func TryReader(src io.Reader, encoding string) io.ReadCloser {
 	cr, err := NewReader(src, encoding)
 	if err != nil {
@@ -171,8 +174,11 @@ type ResponseWriter struct {
 	Writer
 	http.ResponseWriter
 
-	Encoding string
-	Level    int
+	Encoding  string
+	Level     int
+	AutoFlush bool // defaults to true, flushes buffered data on each Write.
+
+	wroteHeader bool
 }
 
 var _ http.ResponseWriter = (*ResponseWriter)(nil)
@@ -184,6 +190,9 @@ var _ http.ResponseWriter = (*ResponseWriter)(nil)
 //
 // It returns the best candidate among "gzip", "defate", "br", "snappy" and "s2"
 // based on the request's "Accept-Encoding" header value.
+//
+// See `Handler/WriteHandler` for its usage. In-short, the caller should
+// clear the writer through `defer Close()`.
 func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*ResponseWriter, error) {
 	acceptEncoding := r.Header.Values(AcceptEncodingHeaderKey)
 
@@ -212,6 +221,7 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 		Level:          level,
 		Encoding:       encoding,
 		Writer:         cr,
+		AutoFlush:      true,
 	}
 
 	return v, nil
@@ -220,6 +230,8 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 // TryResponseWriter calls the `NewResponseWriter` function
 // and if non nil error returned then
 // it just returns the original "w" http.ResponseWriter.
+// This is just a helper for inline response writer.
+// Use `Handler` or `WriteHandler` instead.
 func TryResponseWriter(w http.ResponseWriter, r *http.Request, level int) http.ResponseWriter {
 	rw, err := NewResponseWriter(w, r, level)
 	if err != nil {
@@ -230,25 +242,37 @@ func TryResponseWriter(w http.ResponseWriter, r *http.Request, level int) http.R
 }
 
 func (w *ResponseWriter) Write(p []byte) (int, error) {
-	// if  some reason {
-	// 	return w.ResponseWriter.Write(p)
-	// }
-
-	if w.Header().Get(ContentTypeHeaderKey) == "" {
-		w.Header().Set(ContentTypeHeaderKey, http.DetectContentType(p))
+	h := w.Header()
+	if _, has := h[ContentTypeHeaderKey]; !has {
+		h[ContentTypeHeaderKey] = []string{http.DetectContentType(p)}
 	}
 
-	w.ResponseWriter.Header().Del(ContentLengthHeaderKey)
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
 
-	return w.Writer.Write(p)
+	n, err := w.Writer.Write(p)
+	if err != nil {
+		return 0, err
+	}
+
+	if w.AutoFlush {
+		err = w.Writer.Flush()
+	}
+
+	return n, err
 }
 
 // WriteHeader sends an HTTP response header with the provided
 // status code. Deletes the "Content-Length" response header and
 // calls the ResponseWriter's WriteHeader method.
 func (w *ResponseWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.Header().Del(ContentLengthHeaderKey)
-	w.ResponseWriter.WriteHeader(statusCode)
+	if !w.wroteHeader {
+		w.wroteHeader = true
+		delete(w.Header(), ContentLengthHeaderKey)
+
+		w.ResponseWriter.WriteHeader(statusCode)
+	}
 }
 
 // Flush sends any buffered data to the client.
