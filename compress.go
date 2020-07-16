@@ -133,26 +133,6 @@ func NewReader(src io.Reader, encoding string) (*Reader, error) {
 	return v, nil
 }
 
-// TryReader calls the `NewReader` function
-// and if non nil error returned then
-// it just returns the original "src".
-//
-// This is just a helper for inline reader.
-// Use `Handler` or `ReadHandler` instead.
-func TryReader(src io.Reader, encoding string) io.ReadCloser {
-	cr, err := NewReader(src, encoding)
-	if err != nil {
-		srcReadCloser, ok := src.(io.ReadCloser)
-		if !ok {
-			srcReadCloser = &noOpReadCloser{src}
-		}
-
-		return srcReadCloser
-	}
-
-	return cr
-}
-
 // Header keys.
 const (
 	AcceptEncodingHeaderKey  = "Accept-Encoding"
@@ -172,7 +152,11 @@ func AddCompressHeaders(h http.Header, encoding string) {
 // ResponseWriter is a compressed data http.ResponseWriter.
 type ResponseWriter struct {
 	Writer
+
 	http.ResponseWriter
+	http.Pusher
+	http.CloseNotifier
+	http.Hijacker
 
 	Encoding  string
 	Level     int
@@ -216,8 +200,30 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 
 	AddCompressHeaders(w.Header(), encoding)
 
+	pusher, ok := w.(http.Pusher)
+	if !ok {
+		pusher = nil // make sure interface value is nil.
+	}
+
+	// This interface is obselete by Go authors
+	// and we only capture it
+	// for compatible reasons. End-developers SHOULD replace
+	// the use of CloseNotifier with the: Request.Context().Done() channel.
+	closeNotifier, ok := w.(http.CloseNotifier)
+	if !ok {
+		closeNotifier = nil
+	}
+
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		hijacker = nil
+	}
+
 	v := &ResponseWriter{
 		ResponseWriter: w,
+		Pusher:         pusher,
+		CloseNotifier:  closeNotifier,
+		Hijacker:       hijacker,
 		Level:          level,
 		Encoding:       encoding,
 		Writer:         cr,
@@ -225,20 +231,6 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 	}
 
 	return v, nil
-}
-
-// TryResponseWriter calls the `NewResponseWriter` function
-// and if non nil error returned then
-// it just returns the original "w" http.ResponseWriter.
-// This is just a helper for inline response writer.
-// Use `Handler` or `WriteHandler` instead.
-func TryResponseWriter(w http.ResponseWriter, r *http.Request, level int) http.ResponseWriter {
-	rw, err := NewResponseWriter(w, r, level)
-	if err != nil {
-		return w
-	}
-
-	return rw
 }
 
 func (w *ResponseWriter) Write(p []byte) (int, error) {
