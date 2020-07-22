@@ -41,6 +41,26 @@ var (
 	ErrNotSupportedCompression = errors.New("compress: unsupported compression")
 )
 
+// DefaultOffers is a slice of default content encodings.
+// See `NewResponseWriter`.
+var DefaultOffers = []string{GZIP, DEFLATE, BROTLI, SNAPPY}
+
+// GetEncoding extracts the best available encoding from the request.
+func GetEncoding(r *http.Request, offers []string) (string, error) {
+	acceptEncoding := r.Header[AcceptEncodingHeaderKey]
+
+	if len(acceptEncoding) == 0 {
+		return "", ErrResponseNotCompressed
+	}
+
+	encoding := negotiateAcceptHeader(acceptEncoding, offers, IDENTITY)
+	if encoding == "" {
+		return "", fmt.Errorf("%w: %s", ErrNotSupportedCompression, encoding)
+	}
+
+	return encoding, nil
+}
+
 // Writer is an interface which all compress writers should implement.
 type Writer interface {
 	io.WriteCloser
@@ -178,15 +198,9 @@ var _ http.ResponseWriter = (*ResponseWriter)(nil)
 // See `Handler/WriteHandler` for its usage. In-short, the caller should
 // clear the writer through `defer Close()`.
 func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*ResponseWriter, error) {
-	acceptEncoding := r.Header.Values(AcceptEncodingHeaderKey)
-
-	if len(acceptEncoding) == 0 {
-		return nil, ErrResponseNotCompressed
-	}
-
-	encoding := negotiateAcceptHeader(acceptEncoding, []string{GZIP, DEFLATE, BROTLI, SNAPPY, S2}, IDENTITY)
-	if encoding == "" {
-		return nil, fmt.Errorf("%w: %s", ErrNotSupportedCompression, encoding)
+	encoding, err := GetEncoding(r, DefaultOffers)
+	if err != nil {
+		return nil, err
 	}
 
 	if level == -1 && encoding == BROTLI {
