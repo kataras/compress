@@ -63,6 +63,36 @@ defer r.Close()
 body, err := ioutil.ReadAll(r)
 ```
 
+To retrieve the underline `http.ResponseWriter` please use `w.(*compress.ResponseWriter).ResponseWriter`.
+
+Example Code:
+```go
+import "net/http"
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    target := "/your/asset.js"
+
+	if pusher, ok := w.(*compress.ResponseWriter).ResponseWriter.(http.Pusher); ok {
+		err := pusher.Push(target, &http.PushOptions{
+            Header: http.Header{
+                "Accept-Encoding": r.Header["Accept-Encoding"],
+        }})
+		if err != nil {
+			if err == http.ErrNotSupported {
+				http.Error(w, "HTTP/2 push not supported", http.StatusHTTPVersionNotSupported)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+    }
+    
+    // [...]
+}
+```
+
+> The `http.CloseNotifier` is obselete by Go authors, please use `Request.Context().Done()` instead.
+
 Supported compression algorithms:
 
 - gzip

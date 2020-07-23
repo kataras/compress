@@ -172,11 +172,7 @@ func AddCompressHeaders(h http.Header, encoding string) {
 // ResponseWriter is a compressed data http.ResponseWriter.
 type ResponseWriter struct {
 	Writer
-
 	http.ResponseWriter
-	http.Pusher
-	http.CloseNotifier
-	http.Hijacker
 
 	Encoding  string
 	Level     int
@@ -214,30 +210,8 @@ func NewResponseWriter(w http.ResponseWriter, r *http.Request, level int) (*Resp
 
 	AddCompressHeaders(w.Header(), encoding)
 
-	pusher, ok := w.(http.Pusher)
-	if !ok {
-		pusher = nil // make sure interface value is nil.
-	}
-
-	// This interface is obselete by Go authors
-	// and we only capture it
-	// for compatible reasons. End-developers SHOULD replace
-	// the use of CloseNotifier with the: Request.Context().Done() channel.
-	closeNotifier, ok := w.(http.CloseNotifier)
-	if !ok {
-		closeNotifier = nil
-	}
-
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		hijacker = nil
-	}
-
 	v := &ResponseWriter{
 		ResponseWriter: w,
-		Pusher:         pusher,
-		CloseNotifier:  closeNotifier,
-		Hijacker:       hijacker,
 		Level:          level,
 		Encoding:       encoding,
 		Writer:         cr,
