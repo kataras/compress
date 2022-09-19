@@ -1,8 +1,8 @@
 module github.com/kataras/compress
 
-go 1.14
+go 1.19
 
 require (
-	github.com/andybalholm/brotli v1.0.0
-	github.com/klauspost/compress v1.10.10
+	github.com/andybalholm/brotli v1.0.4
+	github.com/klauspost/compress v1.15.10
 )
