@@ -1,6 +1,6 @@
 # Compress
 
-[![build status](https://img.shields.io/github/workflow/status/kataras/compress/CI/master?style=for-the-badge)](https://github.com/kataras/compress/actions) [![report card](https://img.shields.io/badge/report%20card-a%2B-ff3333.svg?style=for-the-badge)](https://goreportcard.com/report/github.com/kataras/compress) [![godocs](https://img.shields.io/badge/go-%20docs-488AC7.svg?style=for-the-badge)](https://pkg.go.dev/github.com/kataras/compress)
+[![build status](https://img.shields.io/github/actions/workflow/status/kataras/compress/ci.yml?style=for-the-badge)](https://github.com/kataras/compress/actions) [![report card](https://img.shields.io/badge/report%20card-a%2B-ff3333.svg?style=for-the-badge)](https://goreportcard.com/report/github.com/kataras/compress) [![godocs](https://img.shields.io/badge/go-%20docs-488AC7.svg?style=for-the-badge)](https://pkg.go.dev/github.com/kataras/compress)
 
 Fast and easy-to-use compression package for Go applications.
 
